@@ -20,8 +20,8 @@ use std::iter;
 use rustc_attr as attr;
 use rustc_target::spec::abi::Abi;
 
-const DEFAULT_THRESHOLD: usize = 50;
-const HINT_THRESHOLD: usize = 100;
+const DEFAULT_THRESHOLD: usize = 0; //disable default inlining
+const HINT_THRESHOLD: usize = 25;
 
 const INSTR_COST: usize = 5;
 const CALL_PENALTY: usize = 25;
@@ -40,7 +40,7 @@ struct CallSite<'tcx> {
 
 impl<'tcx> MirPass<'tcx> for Inline {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, source: MirSource<'tcx>, body: &mut BodyAndCache<'tcx>) {
-        if tcx.sess.opts.debugging_opts.mir_opt_level >= 2 {
+        if tcx.sess.opts.debugging_opts.mir_opt_level >= 1 {
             Inliner { tcx, source }.run_pass(body);
         }
     }
@@ -71,8 +71,13 @@ impl Inliner<'tcx> {
 
         let substs = &InternalSubsts::identity_for_item(self.tcx, self.source.def_id());
 
-        // For monomorphic functions, we can use `Reveal::All` to resolve specialized instances.
         if !substs.needs_subst() {
+            // At mir-opt-level <= 1, skip this pass on monomorphic functions
+            if self.tcx.sess.opts.debugging_opts.mir_opt_level <= 1 {
+                return;
+            }
+
+            // For monomorphic functions, we can use `Reveal::All` to resolve specialized instances.
             param_env = param_env.with_reveal_all();
         }
 
